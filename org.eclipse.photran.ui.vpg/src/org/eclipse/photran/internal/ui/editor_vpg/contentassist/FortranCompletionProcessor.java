@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.IDocument;
@@ -24,7 +26,26 @@ import org.eclipse.jface.text.contentassist.IContentAssistProcessor;
 import org.eclipse.jface.text.contentassist.IContentAssistant;
 import org.eclipse.jface.text.contentassist.IContextInformation;
 import org.eclipse.jface.text.contentassist.IContextInformationValidator;
+import org.eclipse.photran.internal.core.lexer.Token;
 import org.eclipse.photran.internal.core.analysis.binding.Definition;
+import org.eclipse.photran.internal.core.analysis.binding.Definition.Classification;
+import org.eclipse.photran.internal.core.analysis.binding.ScopingNode;
+import org.eclipse.photran.internal.core.analysis.types.Type;
+import org.eclipse.photran.internal.core.analysis.types.DerivedType;
+import org.eclipse.photran.internal.core.vpg.AnnotationType;
+import org.eclipse.photran.internal.core.vpg.PhotranTokenRef;
+import org.eclipse.photran.internal.core.parser.ASTDataComponentDefStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTDerivedTypeDefNode;
+import org.eclipse.photran.internal.core.parser.ASTDerivedTypeStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTProcInterfaceNode;
+import org.eclipse.photran.internal.core.parser.ASTSeparatedListNode;
+import org.eclipse.photran.internal.core.parser.ASTTypeAttrSpecNode;
+import org.eclipse.photran.internal.core.parser.ASTTypeBoundProcedurePartNode;
+import org.eclipse.photran.internal.core.parser.IASTListNode;
+import org.eclipse.photran.internal.core.parser.IASTNode;
+import org.eclipse.photran.internal.core.parser.IDerivedTypeBodyConstruct;
+import org.eclipse.photran.internal.core.parser.IInternalSubprogram;
+import org.eclipse.photran.internal.core.parser.IProcBindingStmt;
 import org.eclipse.photran.internal.core.properties.SearchPathProperties;
 import org.eclipse.photran.internal.ui.editor.FortranEditor;
 import org.eclipse.photran.internal.ui.editor.FortranTemplateCompletionProcessor;
@@ -95,21 +116,27 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 
                 int line = determineLineNumberForOffset(offset, document);
                 String scopeName = determineScopeNameForLine(line);
+                Iterable<Definition> classDefs = determineDefsForClass(offset,line,document,scopeName);
                 
                 if (scopeName != null)
                     computer = new FortranCompletionProposalComputer(defs, scopeName, document, offset);
 
                 // Include proposals in this order:
+                if (classDefs != null && computer != null) {
+                    // If we are adding a class method search for it
+                    proposals.addAll(computer.proposalsFromTheseDefs(classDefs));
+                } else {    
                 
-                // 1. Local variables, functions, etc.
-                if (computer != null) proposals.addAll(computer.proposalsFromDefs());
+                    // 1. Local variables, functions, etc.
+                    if (computer != null) proposals.addAll(computer.proposalsFromDefs());
                 
-                // 2. Code templates
-                for (ICompletionProposal proposal : new FortranTemplateCompletionProcessor().computeCompletionProposals(viewer, offset))
-                    proposals.add(proposal);
+                    // 2. Code templates
+                    for (ICompletionProposal proposal : new FortranTemplateCompletionProcessor().computeCompletionProposals(viewer, offset))
+                        proposals.add(proposal);
 
-                // 3. Intrinsic procedures
-                if (computer != null) proposals.addAll(computer.proposalsFromIntrinsics());
+                    // 3. Intrinsic procedures
+                    if (computer != null) proposals.addAll(computer.proposalsFromIntrinsics());
+                }
             }
             catch (Exception e)
             {
@@ -118,6 +145,263 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
         }
         
         return proposals.toArray(new ICompletionProposal[proposals.size()]);
+    }
+    
+    private final List<Definition> getDefsForClass(ScopingNode classScope) throws BadLocationException
+    {
+        // Get known definitions
+        List<Definition> classDefs = classScope.getAllDefinitions();
+        // Object is a derived type
+        if (classScope instanceof ASTDerivedTypeDefNode ) {
+            ASTDerivedTypeDefNode typeNode = (ASTDerivedTypeDefNode) classScope;
+            // Look for procedures bound as pointer variables
+            IASTListNode<IDerivedTypeBodyConstruct> typeBody =  typeNode.getDerivedTypeBody();
+            if (typeBody != null) {
+                // Search AST variable definitions
+                for (IDerivedTypeBodyConstruct var: typeBody)
+                {
+                    // Skip standard variable clauses
+                    if (var instanceof ASTDataComponentDefStmtNode)
+                        continue;
+                    Token protoken = var.findFirstToken();
+                    Iterable< ? extends IASTNode> children = var.getChildren();
+                    for (IASTNode child: children){
+                        if (!(child instanceof ASTSeparatedListNode))
+                            continue;
+                        protoken = child.findFirstToken();
+                        if (protoken.isIdentifier())
+                            break;
+                    }
+                    // Create definition object
+                    PhotranTokenRef mytoken = protoken.getTokenRef();
+                    Definition pro_def = new Definition(protoken.getText(),mytoken,Classification.DERIVED_TYPE_COMPONENT,Type.VOID); 
+                    classDefs.add(pro_def);
+                }
+            }
+            // Look for standard type-bound procedures
+            ASTTypeBoundProcedurePartNode typePro =  typeNode.getTypeBoundProcedurePart();
+            if (typePro != null) {
+                IASTListNode<IProcBindingStmt> boundPros = typePro.getProcBindingStmts();
+                // Parse AST type-bound procedures
+                for (IProcBindingStmt procedure: boundPros)
+                {
+                    Token protoken = procedure.findFirstToken();
+                    Iterable< ? extends IASTNode> children = procedure.getChildren();
+                    for (IASTNode child: children){
+                        protoken = child.findFirstToken();
+                        if (protoken.isIdentifier())
+                            break;
+                    }
+                    // Create definition object
+                    PhotranTokenRef mytoken = protoken.getTokenRef();
+                    Definition pro_def = new Definition(protoken.getText(),mytoken,Classification.DERIVED_TYPE_COMPONENT,Type.VOID); 
+                    classDefs.add(pro_def);
+                }
+            }
+        }
+        return classDefs;
+    }
+    
+    private final Iterable<Definition> determineDefsForClass(int offset, int line, IDocument document, String scopeName) throws BadLocationException
+    {
+        String scopeTemp = scopeName;
+        ScopingNode parentScope = null;
+        List<Definition> classDefs = null;
+        ScopingNode classScope = null;
+        // Activate based on class method access
+        char prev_char = document.getChar(offset-1);
+        if (prev_char != '%')
+            return classDefs;
+        // Get line to analyze
+        int line_offset = document.getLineOffset(line);
+        int cur_length = offset-line_offset-1;
+        String current_line = document.get(line_offset, cur_length);
+        // Compute base variable for current class chain
+        String current_variable = null;
+        Pattern var_pattern = Pattern.compile("[a-zA-Z0-9_%(,)]*"); //$NON-NLS-1$
+        Matcher matched_vars = var_pattern.matcher(current_line);
+        while (matched_vars.find()) {
+            String var_temp = matched_vars.group();
+            if (!var_temp.equals("")) //$NON-NLS-1$
+                current_variable = matched_vars.group();
+        }
+        // Handle arrays usage
+        current_variable = current_variable.replaceAll("\\(([^\\)]+)\\)", ""); //$NON-NLS-1$ //$NON-NLS-2$
+        // Remove leading characters if setting an array index
+        int parenLoc = current_variable.lastIndexOf('(');
+        if (parenLoc>=0)
+        {
+            current_variable = current_variable.substring(parenLoc+1);
+        }
+        // Handle nested classes
+        String[] sub_fields = current_variable.split("%"); //$NON-NLS-1$
+        String base_variable = sub_fields[0];
+        // Search for base variable in currently available scopes
+        String type_name = null;
+        Iterable<Definition> proposalsToConsider = null;
+        while (true)
+        {   
+            proposalsToConsider = defs.get(scopeTemp);
+            if (proposalsToConsider != null)
+            {
+                for (Definition def : proposalsToConsider)
+                {
+                    if (def.getClassification().equals(Classification.MAIN_PROGRAM))
+                        continue;
+                    String identifier = def.getDeclaredName();
+                    if (!identifier.equals(base_variable))
+                        continue;
+                    // Base variable definition found
+                    Type var_type = def.getType();
+                    if (var_type instanceof DerivedType ) {
+                        String[] tmp1 = var_type.toString().split("\\("); //$NON-NLS-1$
+                        String[] tmp2 = tmp1[1].split("\\)"); //$NON-NLS-1$
+                        type_name = tmp2[0];
+                        break;
+                    }
+                }
+            }
+            // Exit if type name was determined
+            if (type_name != null)
+                break;
+            // Step to next outer scope if declaration has not been found
+            int colon = scopeTemp.indexOf(':');
+            if (colon < 0)
+                break;
+            else
+                scopeTemp = scopeTemp.substring(colon+1);
+        }
+        // Step up remaining scopes looking for type definition
+        outerloop:
+            while (true)
+            {   
+                proposalsToConsider = defs.get(scopeTemp);
+                if (proposalsToConsider != null)
+                {
+                    for (Definition def : proposalsToConsider)
+                    {
+                        if (def.getClassification().equals(Classification.MAIN_PROGRAM))
+                            continue;
+                        String identifier = def.getDeclaredName();
+                        // Type definition found
+                        if (identifier.equals(type_name)) {
+                            PhotranTokenRef mytoken = def.getTokenRef();
+                            Token mydef = mytoken.getASTNode();
+                            parentScope = mydef.getEnclosingScope();
+                            classScope = mydef.getLocalScope();
+                            // Get known definitions
+                            classDefs = classScope.getAllDefinitions();
+                            // If class chain wait till top level
+                            if (sub_fields.length > 1) {
+                                break;
+                            } else {
+                                break outerloop;
+                            }
+                        }
+                    }
+                }
+                //
+                if (classDefs != null)
+                    break;
+                // Step to next outer scope if declaration has not been found
+                int colon = scopeTemp.indexOf(':');
+                if (colon < 0)
+                    break;
+                else
+                    scopeTemp = scopeTemp.substring(colon+1);
+            }
+        // Step up class chain to current type
+        if (sub_fields.length > 1) {
+            for (int i = 1; i<sub_fields.length; i=i+1)
+            {
+                // Find variable in current type
+                proposalsToConsider = classDefs;
+                if (proposalsToConsider != null)
+                {
+                    for (Definition def : proposalsToConsider)
+                    {
+                        if (def.getClassification().equals(Classification.MAIN_PROGRAM))
+                            continue;
+                        //
+                        String identifier = def.getDeclaredName();
+                        if (!identifier.equals(sub_fields[i]))
+                            continue;
+                        // Get type name
+                        Type var_type = def.getType();
+                        if (var_type instanceof DerivedType ) {
+                            String[] tmp1 = var_type.toString().split("\\("); //$NON-NLS-1$
+                            String[] tmp2 = tmp1[1].split("\\)"); //$NON-NLS-1$
+                            type_name = tmp2[0];
+                        }
+                    }
+                }
+                // Find new type in parent scope
+                proposalsToConsider = parentScope.getAllDefinitions();
+                if (proposalsToConsider != null)
+                {
+                    for (Definition def : proposalsToConsider)
+                    {
+                        if (def.getClassification().equals(Classification.MAIN_PROGRAM))
+                            continue;
+                        //
+                        String identifier = def.getDeclaredName();
+                        if (!identifier.equals(type_name))
+                            continue;
+                        //
+                        PhotranTokenRef mytoken = def.getTokenRef();
+                        Token mydef = mytoken.getASTNode();
+                        classScope = mydef.getLocalScope();
+                    }
+                }
+            }
+        }
+        // If we have located the scope get definitions
+        if (classScope != null) {
+            // Definitions for this scope
+            classDefs = getDefsForClass(classScope);
+            // Process inherited elements
+            PhotranTokenRef mytoken = null;
+            while (true) {
+                if (classScope instanceof ASTDerivedTypeDefNode ) {
+                    Token parentClass = null;
+                    ASTDerivedTypeDefNode typeNode = (ASTDerivedTypeDefNode) classScope;
+                    // Look for inheritance node
+                    ASTDerivedTypeStmtNode typeDef =  typeNode.getDerivedTypeStmt();
+                    IASTListNode<ASTTypeAttrSpecNode> defList = typeDef.getTypeAttrSpecList();
+                    if (defList != null) {
+                        for (ASTTypeAttrSpecNode currDef: defList) {
+                            if (!currDef.isExtends())
+                                continue;
+                            parentClass = currDef.getParentTypeName();
+                            List<PhotranTokenRef> possParents = parentScope.manuallyResolve(parentClass);
+                            mytoken = possParents.get(0);
+                            parentClass = mytoken.getASTNode();
+                        }
+                    }
+                    // Scan parent class for new methods/variables
+                    if (parentClass==null) {
+                        break;
+                    } else {
+                        ScopingNode tempScope = parentClass.getLocalScope();
+                        // Get known definitions
+                        List<Definition> tempDefs = getDefsForClass(tempScope);
+                        for (Definition newDef: tempDefs) {
+                            boolean overridden = false;
+                            for (Definition currDef: classDefs){
+                                String currIden = currDef.getDeclaredName();
+                                if (currIden.equals(newDef.getDeclaredName()))
+                                    overridden = true;
+                            }
+                            if (!overridden)
+                                classDefs.add(newDef);
+                        }
+                        // Update scope to move up inheritance ladder
+                        classScope = tempScope;
+                    }
+                }
+            }
+        }
+        return classDefs;
     }
 
     private int determineLineNumberForOffset(int offset, IDocument document) throws BadLocationException

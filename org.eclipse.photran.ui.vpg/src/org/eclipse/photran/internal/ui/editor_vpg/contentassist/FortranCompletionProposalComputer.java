@@ -26,9 +26,16 @@ import org.eclipse.jface.text.templates.Template;
 import org.eclipse.jface.text.templates.TemplateProposal;
 import org.eclipse.photran.internal.core.analysis.binding.Definition;
 import org.eclipse.photran.internal.core.analysis.binding.Definition.Classification;
+import org.eclipse.photran.internal.core.analysis.binding.ScopingNode;
 import org.eclipse.photran.internal.core.lang.intrinsics.IntrinsicProcDescription;
 import org.eclipse.photran.internal.core.lang.intrinsics.Intrinsics;
+import org.eclipse.photran.internal.core.lexer.Token;
 import org.eclipse.photran.internal.core.model.FortranElement;
+import org.eclipse.photran.internal.core.parser.ASTSubroutineParNode;
+import org.eclipse.photran.internal.core.parser.ASTSubroutineStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTSubroutineSubprogramNode;
+import org.eclipse.photran.internal.core.parser.IASTListNode;
+import org.eclipse.photran.internal.core.vpg.PhotranTokenRef;
 import org.eclipse.photran.internal.core.vpg.PhotranVPG;
 import org.eclipse.photran.internal.ui.FortranTemplateManager;
 import org.eclipse.photran.internal.ui.editor.CompletionComputer;
@@ -52,6 +59,13 @@ class FortranCompletionProposalComputer extends CompletionComputer
         super(document, offset);
         this.defs = defs;
         this.scope = scope;
+    }
+    
+    public List<ICompletionProposal> proposalsFromTheseDefs(Iterable<Definition> defsIn) throws BadLocationException
+    {
+        TreeSet<FortranCompletionProposal> proposals = new TreeSet<FortranCompletionProposal>();
+        addProposals(defsIn, proposals);
+        return toProposalArray(proposals);
     }
 
     public List<ICompletionProposal> proposalsFromDefs() throws BadLocationException
@@ -91,6 +105,31 @@ class FortranCompletionProposalComputer extends CompletionComputer
                 
                 String identifier = def.getDeclaredName();
                 String canonicalizedId = def.getCanonicalizedName();
+                //
+                PhotranTokenRef mytoken = def.getTokenRef();
+                if (mytoken != null) {
+                    Token newToken = mytoken.getASTNode();
+                    ScopingNode myNode = newToken.getLocalScope();
+                    if (myNode instanceof ASTSubroutineSubprogramNode) {
+                        ASTSubroutineSubprogramNode subNode = (ASTSubroutineSubprogramNode) myNode;
+                        ASTSubroutineStmtNode subStatement = subNode.getSubroutineStmt();
+                        IASTListNode<ASTSubroutineParNode> subParams = subStatement.getSubroutinePars();
+                        String fullId = identifier + "("; //$NON-NLS-1$
+                        if (subParams != null) {
+                            int paramCount = 0;
+                            for (ASTSubroutineParNode param: subParams) {
+                                Token tmpToken = param.getVariableName();
+                                String paramText = tmpToken.getText();
+                                if (paramCount>0)
+                                    paramText = "," + paramText; //$NON-NLS-1$
+                                fullId = fullId + paramText;
+                                paramCount=paramCount+1;
+                            }
+                        }
+                        fullId = fullId + ")"; //$NON-NLS-1$
+                        identifier = fullId;
+                    }
+                }
                 if (canonicalizedId.startsWith(prefix) && canonicalizedId.endsWith(suffix))
                     proposals.add(createProposal(identifier,
                                                  def.describeClassification(),
