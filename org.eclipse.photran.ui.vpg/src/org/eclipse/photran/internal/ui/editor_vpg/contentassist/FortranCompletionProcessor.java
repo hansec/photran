@@ -39,6 +39,10 @@ import org.eclipse.photran.internal.core.parser.ASTDerivedTypeDefNode;
 import org.eclipse.photran.internal.core.parser.ASTDerivedTypeStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTProcInterfaceNode;
 import org.eclipse.photran.internal.core.parser.ASTSeparatedListNode;
+import org.eclipse.photran.internal.core.parser.ASTSpecificBindingNode;
+import org.eclipse.photran.internal.core.parser.ASTSubroutineParNode;
+import org.eclipse.photran.internal.core.parser.ASTSubroutineStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTSubroutineSubprogramNode;
 import org.eclipse.photran.internal.core.parser.ASTTypeAttrSpecNode;
 import org.eclipse.photran.internal.core.parser.ASTTypeBoundProcedurePartNode;
 import org.eclipse.photran.internal.core.parser.IASTListNode;
@@ -123,10 +127,9 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
 
                 // Include proposals in this order:
                 if (classDefs != null && computer != null) {
-                    // If we are adding a class method search for it
+                    // If we are working on a type look for internal fields only
                     proposals.addAll(computer.proposalsFromTheseDefs(classDefs));
                 } else {    
-                
                     // 1. Local variables, functions, etc.
                     if (computer != null) proposals.addAll(computer.proposalsFromDefs());
                 
@@ -151,6 +154,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
     {
         // Get known definitions
         List<Definition> classDefs = classScope.getAllDefinitions();
+        ScopingNode parentScope = classScope.getEnclosingScope();
         // Object is a derived type
         if (classScope instanceof ASTDerivedTypeDefNode ) {
             ASTDerivedTypeDefNode typeNode = (ASTDerivedTypeDefNode) classScope;
@@ -185,17 +189,42 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 // Parse AST type-bound procedures
                 for (IProcBindingStmt procedure: boundPros)
                 {
-                    Token protoken = procedure.findFirstToken();
-                    Iterable< ? extends IASTNode> children = procedure.getChildren();
-                    for (IASTNode child: children){
-                        protoken = child.findFirstToken();
-                        if (protoken.isIdentifier())
-                            break;
+                    if (procedure instanceof ASTSpecificBindingNode) {
+                        ASTSpecificBindingNode currNode = (ASTSpecificBindingNode) procedure;
+                        Token intName = currNode.getBindingName();
+                        String subName = intName.getText();
+                        Token proName = currNode.getProcedureName();
+                        //
+                        List<PhotranTokenRef> possParents = parentScope.manuallyResolve(proName);
+                        PhotranTokenRef mytoken = possParents.get(0);
+                        proName = mytoken.getASTNode();
+                        ScopingNode myNode = proName.getLocalScope();
+                        if (myNode instanceof ASTSubroutineSubprogramNode) {
+                            ASTSubroutineSubprogramNode subNode = (ASTSubroutineSubprogramNode) myNode;
+                            ASTSubroutineStmtNode subStatement = subNode.getSubroutineStmt();
+                            IASTListNode<ASTSubroutineParNode> subParams = subStatement.getSubroutinePars();
+                            StringBuilder fullId = new StringBuilder(40);
+                            fullId.append(intName.getText());
+                            fullId.append('(');
+                            if (subParams != null) {
+                                int paramCount = 0;
+                                for (ASTSubroutineParNode param: subParams) {
+                                    Token tmpToken = param.getVariableName();
+                                    String paramText = tmpToken.getText();
+                                    if (paramCount>0)
+                                        fullId.append(',');
+                                    fullId.append(paramText);
+                                    paramCount=paramCount+1;
+                                }
+                            }
+                            fullId.append(')');
+                            subName = fullId.toString();
+                        }
+                        // Create definition object
+                        mytoken = proName.getTokenRef();
+                        Definition pro_def = new Definition(subName,mytoken,Classification.SUBROUTINE,Type.VOID); 
+                        classDefs.add(pro_def);
                     }
-                    // Create definition object
-                    PhotranTokenRef mytoken = protoken.getTokenRef();
-                    Definition pro_def = new Definition(protoken.getText(),mytoken,Classification.DERIVED_TYPE_COMPONENT,Type.VOID); 
-                    classDefs.add(pro_def);
                 }
             }
         }
@@ -256,7 +285,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                     if (var_type instanceof DerivedType ) {
                         String[] tmp1 = var_type.toString().split("\\("); //$NON-NLS-1$
                         String[] tmp2 = tmp1[1].split("\\)"); //$NON-NLS-1$
-                        type_name = tmp2[0];
+                        type_name = tmp2[0].toLowerCase();
                         break;
                     }
                 }
@@ -282,7 +311,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                     {
                         if (def.getClassification().equals(Classification.MAIN_PROGRAM))
                             continue;
-                        String identifier = def.getDeclaredName();
+                        String identifier = def.getCanonicalizedName();
                         // Type definition found
                         if (identifier.equals(type_name)) {
                             PhotranTokenRef mytoken = def.getTokenRef();
@@ -323,15 +352,16 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                         if (def.getClassification().equals(Classification.MAIN_PROGRAM))
                             continue;
                         //
-                        String identifier = def.getDeclaredName();
-                        if (!identifier.equals(sub_fields[i]))
+                        String identifier = def.getCanonicalizedName();
+                        if (!identifier.equals(sub_fields[i].toLowerCase()))
                             continue;
                         // Get type name
                         Type var_type = def.getType();
                         if (var_type instanceof DerivedType ) {
                             String[] tmp1 = var_type.toString().split("\\("); //$NON-NLS-1$
                             String[] tmp2 = tmp1[1].split("\\)"); //$NON-NLS-1$
-                            type_name = tmp2[0];
+                            type_name = tmp2[0].toLowerCase();
+                            break;
                         }
                     }
                 }
@@ -344,13 +374,21 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                         if (def.getClassification().equals(Classification.MAIN_PROGRAM))
                             continue;
                         //
-                        String identifier = def.getDeclaredName();
+                        String identifier = def.getCanonicalizedName();
                         if (!identifier.equals(type_name))
                             continue;
                         //
                         PhotranTokenRef mytoken = def.getTokenRef();
+                        // Look in parent scope
                         Token mydef = mytoken.getASTNode();
+                        List<PhotranTokenRef> possParents = parentScope.manuallyResolve(mydef);
+                        mytoken = possParents.get(0);
+                        mydef = mytoken.getASTNode();
                         classScope = mydef.getLocalScope();
+                        parentScope = mydef.getEnclosingScope();
+                        // Get known definitions
+                        classDefs = classScope.getAllDefinitions();
+                        break;
                     }
                 }
             }
@@ -388,8 +426,8 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                         for (Definition newDef: tempDefs) {
                             boolean overridden = false;
                             for (Definition currDef: classDefs){
-                                String currIden = currDef.getDeclaredName();
-                                if (currIden.equals(newDef.getDeclaredName()))
+                                String currIden = currDef.getCanonicalizedName();
+                                if (currIden.equals(newDef.getCanonicalizedName()))
                                     overridden = true;
                             }
                             if (!overridden)

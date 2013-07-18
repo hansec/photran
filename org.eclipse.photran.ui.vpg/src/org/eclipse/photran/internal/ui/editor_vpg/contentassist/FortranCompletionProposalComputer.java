@@ -103,33 +103,8 @@ class FortranCompletionProposalComputer extends CompletionComputer
                 if (def.getClassification().equals(Classification.MAIN_PROGRAM))
                     continue;
                 
-                String identifier = def.getDeclaredName();
+                String identifier = def.getCompletionText();
                 String canonicalizedId = def.getCanonicalizedName();
-                //
-                PhotranTokenRef mytoken = def.getTokenRef();
-                if (mytoken != null) {
-                    Token newToken = mytoken.getASTNode();
-                    ScopingNode myNode = newToken.getLocalScope();
-                    if (myNode instanceof ASTSubroutineSubprogramNode) {
-                        ASTSubroutineSubprogramNode subNode = (ASTSubroutineSubprogramNode) myNode;
-                        ASTSubroutineStmtNode subStatement = subNode.getSubroutineStmt();
-                        IASTListNode<ASTSubroutineParNode> subParams = subStatement.getSubroutinePars();
-                        String fullId = identifier + "("; //$NON-NLS-1$
-                        if (subParams != null) {
-                            int paramCount = 0;
-                            for (ASTSubroutineParNode param: subParams) {
-                                Token tmpToken = param.getVariableName();
-                                String paramText = tmpToken.getText();
-                                if (paramCount>0)
-                                    paramText = "," + paramText; //$NON-NLS-1$
-                                fullId = fullId + paramText;
-                                paramCount=paramCount+1;
-                            }
-                        }
-                        fullId = fullId + ")"; //$NON-NLS-1$
-                        identifier = fullId;
-                    }
-                }
                 if (canonicalizedId.startsWith(prefix) && canonicalizedId.endsWith(suffix))
                     proposals.add(createProposal(identifier,
                                                  def.describeClassification(),

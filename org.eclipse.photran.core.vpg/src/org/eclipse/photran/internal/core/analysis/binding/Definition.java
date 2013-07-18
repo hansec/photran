@@ -126,7 +126,7 @@ public class Definition implements IPhotranSerializable, Comparable<Definition>
 
     protected Classification classification;
     protected PhotranTokenRef tokenRef;
-    protected String declaredName, canonicalizedName;
+    protected String declaredName, canonicalizedName, completionText;
     //protected Visibility visibility;
     protected Type type;
     protected ArraySpec arraySpec;
@@ -157,6 +157,7 @@ public class Definition implements IPhotranSerializable, Comparable<Definition>
         //this.visibility = visibility; //Visibility.INHERIT_FROM_SCOPE;
         this.type = type;
         this.arraySpec = null;
+        this.completionText = declaredName;
     }
 
 	protected String canonicalize(String identifier)
@@ -324,6 +325,18 @@ public class Definition implements IPhotranSerializable, Comparable<Definition>
     public String getCanonicalizedName()
     {
         return canonicalizedName;
+    }
+    
+    /** @return the name of the entity this defines, canonicalized by <code>PhotranVPG.canonicalizeIdentifier</code> */
+    public void setCompletionText(String completionText)
+    {
+        this.completionText = completionText;
+    }
+    
+    /** @return the name of the entity this defines, canonicalized by <code>PhotranVPG.canonicalizeIdentifier</code> */
+    public String getCompletionText()
+    {
+        return completionText;
     }
 
     /** @return a description of the type of entity being defined */
@@ -1139,6 +1152,7 @@ public class Definition implements IPhotranSerializable, Comparable<Definition>
         result.intent_out = PhotranVPGSerializer.deserialize(in);
         result.optional = PhotranVPGSerializer.deserialize(in);
         result.save = PhotranVPGSerializer.deserialize(in);
+        result.completionText = result.declaredName;
         return result;
     }
 

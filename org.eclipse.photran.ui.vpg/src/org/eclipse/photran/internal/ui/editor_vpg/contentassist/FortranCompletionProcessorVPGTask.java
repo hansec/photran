@@ -17,9 +17,16 @@ import java.util.TreeSet;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.photran.core.IFortranAST;
 import org.eclipse.photran.internal.core.analysis.binding.Definition;
+import org.eclipse.photran.internal.core.analysis.binding.Definition.Classification;
 import org.eclipse.photran.internal.core.analysis.binding.ScopingNode;
+import org.eclipse.photran.internal.core.lexer.Token;
+import org.eclipse.photran.internal.core.parser.ASTSubroutineParNode;
+import org.eclipse.photran.internal.core.parser.ASTSubroutineStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTSubroutineSubprogramNode;
 import org.eclipse.photran.internal.core.parser.GenericASTVisitor;
+import org.eclipse.photran.internal.core.parser.IASTListNode;
 import org.eclipse.photran.internal.core.parser.IASTNode;
+import org.eclipse.photran.internal.core.vpg.PhotranTokenRef;
 import org.eclipse.photran.internal.ui.editor_vpg.DefinitionMap;
 import org.eclipse.photran.internal.ui.editor_vpg.IFortranEditorVPGTask;
 
@@ -53,9 +60,37 @@ final class FortranCompletionProcessorVPGTask implements IFortranEditorVPGTask
                         
                         TreeSet<Definition> set = defs.get(qualifier);
                         if (set == null) set = new TreeSet<Definition>();
-                        for (Definition def : allDefs)
-                            if (def != null)
+                        for (Definition def : allDefs)                                                       
+                            if (def != null) {
+                                // Populate subroutines with parameters
+                                PhotranTokenRef mytoken = def.getTokenRef();
+                                if (mytoken != null && def.getClassification().equals(Classification.SUBROUTINE)) {
+                                    Token newToken = mytoken.getASTNode();
+                                    ScopingNode myNode = newToken.getLocalScope();
+                                    if (myNode instanceof ASTSubroutineSubprogramNode) {
+                                        ASTSubroutineSubprogramNode subNode = (ASTSubroutineSubprogramNode) myNode;
+                                        ASTSubroutineStmtNode subStatement = subNode.getSubroutineStmt();
+                                        IASTListNode<ASTSubroutineParNode> subParams = subStatement.getSubroutinePars();
+                                        StringBuilder fullId = new StringBuilder(40);
+                                        fullId.append(def.getDeclaredName());
+                                        fullId.append('(');
+                                        if (subParams != null) {
+                                            int paramCount = 0;
+                                            for (ASTSubroutineParNode param: subParams) {
+                                                Token tmpToken = param.getVariableName();
+                                                String paramText = tmpToken.getText();
+                                                if (paramCount>0)
+                                                    fullId.append(',');
+                                                fullId.append(paramText);
+                                                paramCount=paramCount+1;
+                                            }
+                                        }
+                                        fullId.append(')');
+                                        def.setCompletionText(fullId.toString());
+                                    }
+                                }
                                 set.add(def);
+                            }
                         defs.put(qualifier, set);
                     }
                     
