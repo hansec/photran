@@ -120,10 +120,11 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 
                 int line = determineLineNumberForOffset(offset, document);
                 String scopeName = determineScopeNameForLine(line);
+                int contextType = determineContext(offset,line,document);
                 Iterable<Definition> classDefs = determineDefsForClass(offset,line,document,scopeName);
                 
                 if (scopeName != null)
-                    computer = new FortranCompletionProposalComputer(defs, scopeName, document, offset);
+                    computer = new FortranCompletionProposalComputer(defs, scopeName, document, offset,contextType);
 
                 // Include proposals in this order:
                 if (classDefs != null && computer != null) {
@@ -231,20 +232,38 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
         return classDefs;
     }
     
+    private final int determineContext(int offset, int line, IDocument document) throws BadLocationException
+    {
+        int contextType = 0;
+        // Get line to analyze
+        int line_offset = document.getLineOffset(line);
+        int cur_length = offset-line_offset;
+        String current_line = document.get(line_offset, cur_length);
+        current_line = current_line.toLowerCase();
+        // Check if in type declaration
+        if (current_line.matches("[ ]*(class|type)( is)?\\([a-z0-9_ ]*")) //$NON-NLS-1$
+            contextType=1;
+        // Check if allocation statement
+        if (current_line.matches("[ ]*(allocate)\\([a-z0-9_,%() ]*")) //$NON-NLS-1$
+            contextType=2;
+        // Check if allocation statement
+        if (current_line.matches("[ ]*(deallocate|nullify)\\([a-z0-9_,%() ]*")) //$NON-NLS-1$
+            contextType=3;
+        // Unknown context
+        return contextType;
+    }
+    
     private final Iterable<Definition> determineDefsForClass(int offset, int line, IDocument document, String scopeName) throws BadLocationException
     {
         String scopeTemp = scopeName;
         ScopingNode parentScope = null;
         List<Definition> classDefs = null;
         ScopingNode classScope = null;
-        // Activate based on class method access
-        char prev_char = document.getChar(offset-1);
-        if (prev_char != '%')
-            return classDefs;
         // Get line to analyze
         int line_offset = document.getLineOffset(line);
-        int cur_length = offset-line_offset-1;
+        int cur_length = offset-line_offset;
         String current_line = document.get(line_offset, cur_length);
+        String prevChar = document.get(offset-1,1);
         // Compute base variable for current class chain
         String current_variable = null;
         Pattern var_pattern = Pattern.compile("[a-zA-Z0-9_%(,)]*"); //$NON-NLS-1$
@@ -254,6 +273,10 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
             if (!var_temp.equals("")) //$NON-NLS-1$
                 current_variable = matched_vars.group();
         }
+        if (current_variable == null)
+            return classDefs;
+        if (!(current_variable.contains("%") && current_variable.endsWith(prevChar))) //$NON-NLS-1$
+            return classDefs;
         // Handle arrays usage
         current_variable = current_variable.replaceAll("\\(([^\\)]+)\\)", ""); //$NON-NLS-1$ //$NON-NLS-2$
         // Remove leading characters if setting an array index
@@ -343,6 +366,8 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
         if (sub_fields.length > 1) {
             for (int i = 1; i<sub_fields.length; i=i+1)
             {
+                if (sub_fields[i]=="") //$NON-NLS-1$
+                    break;
                 // Find variable in current type
                 proposalsToConsider = classDefs;
                 if (proposalsToConsider != null)

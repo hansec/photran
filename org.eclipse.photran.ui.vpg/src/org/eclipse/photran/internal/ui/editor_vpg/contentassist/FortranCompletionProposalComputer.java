@@ -53,12 +53,14 @@ class FortranCompletionProposalComputer extends CompletionComputer
 {
     private HashMap<String, TreeSet<Definition>> defs;
     private String scope;
+    private int contextType;
 
-    FortranCompletionProposalComputer(HashMap<String, TreeSet<Definition>> defs, String scope, IDocument document, int offset) throws BadLocationException
+    FortranCompletionProposalComputer(HashMap<String, TreeSet<Definition>> defs, String scope, IDocument document, int offset, int contextType) throws BadLocationException
     {
         super(document, offset);
         this.defs = defs;
         this.scope = scope;
+        this.contextType = contextType;
     }
     
     public List<ICompletionProposal> proposalsFromTheseDefs(Iterable<Definition> defsIn) throws BadLocationException
@@ -102,7 +104,17 @@ class FortranCompletionProposalComputer extends CompletionComputer
             {
                 if (def.getClassification().equals(Classification.MAIN_PROGRAM))
                     continue;
-                
+                //Filter by context
+                if (this.contextType == 1 && !(def.getClassification().equals(Classification.DERIVED_TYPE)))
+                    continue;
+                if (this.contextType == 2 && !(def.getClassification().equals(Classification.DERIVED_TYPE) ||
+                    def.getClassification().equals(Classification.VARIABLE_DECLARATION) ||
+                    def.getClassification().equals(Classification.FUNCTION)))
+                    continue;
+                if (this.contextType == 3 && !def.getClassification().equals(Classification.VARIABLE_DECLARATION))
+                    continue;
+                    
+                //
                 String identifier = def.getCompletionText();
                 String canonicalizedId = def.getCanonicalizedName();
                 if (canonicalizedId.startsWith(prefix) && canonicalizedId.endsWith(suffix))
