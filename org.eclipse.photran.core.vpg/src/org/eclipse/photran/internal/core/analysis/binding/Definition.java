@@ -1152,7 +1152,7 @@ public class Definition implements IPhotranSerializable, Comparable<Definition>
         result.intent_out = PhotranVPGSerializer.deserialize(in);
         result.optional = PhotranVPGSerializer.deserialize(in);
         result.save = PhotranVPGSerializer.deserialize(in);
-        result.completionText = result.declaredName;
+        result.completionText = PhotranVPGSerializer.deserialize(in);
         return result;
     }
 
@@ -1174,6 +1174,7 @@ public class Definition implements IPhotranSerializable, Comparable<Definition>
         PhotranVPGSerializer.serialize(intent_out, out);
         PhotranVPGSerializer.serialize(optional, out);
         PhotranVPGSerializer.serialize(save, out);
+        PhotranVPGSerializer.serialize(completionText, out);
     }
 
     public char getSerializationCode()

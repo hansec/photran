@@ -62,33 +62,6 @@ final class FortranCompletionProcessorVPGTask implements IFortranEditorVPGTask
                         if (set == null) set = new TreeSet<Definition>();
                         for (Definition def : allDefs)                                                       
                             if (def != null) {
-                                // Populate subroutines with parameters
-                                PhotranTokenRef mytoken = def.getTokenRef();
-                                if (mytoken != null && def.getClassification().equals(Classification.SUBROUTINE)) {
-                                    Token newToken = mytoken.getASTNode();
-                                    ScopingNode myNode = newToken.getLocalScope();
-                                    if (myNode instanceof ASTSubroutineSubprogramNode) {
-                                        ASTSubroutineSubprogramNode subNode = (ASTSubroutineSubprogramNode) myNode;
-                                        ASTSubroutineStmtNode subStatement = subNode.getSubroutineStmt();
-                                        IASTListNode<ASTSubroutineParNode> subParams = subStatement.getSubroutinePars();
-                                        StringBuilder fullId = new StringBuilder(40);
-                                        fullId.append(def.getDeclaredName());
-                                        fullId.append('(');
-                                        if (subParams != null) {
-                                            int paramCount = 0;
-                                            for (ASTSubroutineParNode param: subParams) {
-                                                Token tmpToken = param.getVariableName();
-                                                String paramText = tmpToken.getText();
-                                                if (paramCount>0)
-                                                    fullId.append(',');
-                                                fullId.append(paramText);
-                                                paramCount=paramCount+1;
-                                            }
-                                        }
-                                        fullId.append(')');
-                                        def.setCompletionText(fullId.toString());
-                                    }
-                                }
                                 set.add(def);
                             }
                         defs.put(qualifier, set);

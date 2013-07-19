@@ -12,6 +12,7 @@ package org.eclipse.photran.internal.ui.editor_vpg.contentassist;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
@@ -34,6 +35,7 @@ import org.eclipse.photran.internal.core.analysis.types.Type;
 import org.eclipse.photran.internal.core.analysis.types.DerivedType;
 import org.eclipse.photran.internal.core.vpg.AnnotationType;
 import org.eclipse.photran.internal.core.vpg.PhotranTokenRef;
+import org.eclipse.photran.internal.core.vpg.PhotranVPG;
 import org.eclipse.photran.internal.core.parser.ASTDataComponentDefStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTDerivedTypeDefNode;
 import org.eclipse.photran.internal.core.parser.ASTDerivedTypeStmtNode;
@@ -121,7 +123,18 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 int line = determineLineNumberForOffset(offset, document);
                 String scopeName = determineScopeNameForLine(line);
                 int contextType = determineContext(offset,line,document);
-                Iterable<Definition> classDefs = determineDefsForClass(offset,line,document,scopeName);
+                List<Definition> classDefs = null;
+                if (contextType == 4) {
+                    classDefs = determineModuleNames();
+                    if (classDefs.isEmpty())
+                        classDefs = null;
+                } else if (contextType == 5) {
+                    classDefs = determineModuleDefs(offset,line,document,scopeName);
+                    if (classDefs.isEmpty())
+                        classDefs = null;
+                } else {
+                    classDefs = determineDefsForClass(offset,line,document,scopeName);
+                }
                 
                 if (scopeName != null)
                     computer = new FortranCompletionProposalComputer(defs, scopeName, document, offset,contextType);
@@ -240,20 +253,37 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
         int cur_length = offset-line_offset;
         String current_line = document.get(line_offset, cur_length);
         current_line = current_line.toLowerCase();
-        // Check if in type declaration
-        if (current_line.matches("[ ]*(class|type)( is)?\\([a-z0-9_ ]*")) //$NON-NLS-1$
-            contextType=1;
-        // Check if allocation statement
-        if (current_line.matches("[ ]*(allocate)\\([a-z0-9_,%() ]*")) //$NON-NLS-1$
-            contextType=2;
-        // Check if allocation statement
-        if (current_line.matches("[ ]*(deallocate|nullify)\\([a-z0-9_,%() ]*")) //$NON-NLS-1$
-            contextType=3;
+        // Check for beginning keyword
+        String keywordList = "[ ]*(class|type|use|allocate|deallocate|nullify)";  //$NON-NLS-1$
+        Pattern var_pattern = Pattern.compile(keywordList);
+        Matcher matchedKeyword = var_pattern.matcher(current_line);
+        String keyword = null;
+        if (matchedKeyword.find())
+            keyword = matchedKeyword.group();
+        if (keyword != null) {
+            keyword = keyword.replaceAll(" ",""); //$NON-NLS-1$ //$NON-NLS-2$
+            // Determine type of statement
+            if (keyword.matches("class|type")) { //$NON-NLS-1$ 
+                if (current_line.contains("(") && !current_line.contains(")")) //$NON-NLS-1$ //$NON-NLS-2$
+                    contextType=1;
+            } else if (keyword.matches("allocate")) { //$NON-NLS-1$ 
+                if (current_line.contains("(") && !current_line.contains(")")) //$NON-NLS-1$ //$NON-NLS-2$
+                    contextType=2;
+            } else if (keyword.matches("deallocate|nullify")) { //$NON-NLS-1$ 
+                if (current_line.contains("(") && !current_line.contains(")")) //$NON-NLS-1$ //$NON-NLS-2$
+                    contextType=3;
+            } else if (keyword.matches("use")) { //$NON-NLS-1$ 
+                if (!current_line.contains(":")) //$NON-NLS-1$ 
+                    contextType=4;
+                else
+                    contextType=5;
+            }
+        }
         // Unknown context
         return contextType;
     }
     
-    private final Iterable<Definition> determineDefsForClass(int offset, int line, IDocument document, String scopeName) throws BadLocationException
+    private final List<Definition> determineDefsForClass(int offset, int line, IDocument document, String scopeName) throws BadLocationException
     {
         String scopeTemp = scopeName;
         ScopingNode parentScope = null;
@@ -465,6 +495,60 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
             }
         }
         return classDefs;
+    }
+    
+    private final List<Definition> determineModuleNames()
+    {
+        List<Definition> moduleDefs = new LinkedList<Definition>();
+        PhotranVPG vpg = PhotranVPG.getInstance();
+        Iterable<String> moduleNames = vpg.listAllModules();
+        for (String module: moduleNames) {
+            Definition dummyDef = new Definition(module,null,Classification.MODULE,Type.VOID);
+            moduleDefs.add(dummyDef);
+        }
+        return moduleDefs;
+    }
+    
+    private final List<Definition> determineModuleDefs(int offset, int line, IDocument document, String scopeName) throws BadLocationException
+    {
+        List<Definition> moduleDefs = new LinkedList<Definition>();
+        // Get line to analyze
+        int line_offset = document.getLineOffset(line);
+        int cur_length = offset-line_offset;
+        String current_line = document.get(line_offset, cur_length);
+        current_line = current_line.toLowerCase();
+        // Check for beginning keyword
+        String varChars = "[a-z0-9_]*";  //$NON-NLS-1$
+        Pattern var_pattern = Pattern.compile(varChars);
+        Matcher matchedKeyword = var_pattern.matcher(current_line);
+        String moduleName = null;
+        while (matchedKeyword.find()) {
+            moduleName = matchedKeyword.group();
+            if (!(moduleName.matches("use") || moduleName.isEmpty()))  //$NON-NLS-1$
+                break;
+        }
+        if (moduleName == null)
+            return moduleDefs;
+        // Find module and get defs
+        PhotranVPG vpg = PhotranVPG.getInstance();
+        ArrayList<Definition> modules = vpg.findAllModulesNamed(moduleName);
+        if (modules != null) {
+            if ((modules.isEmpty() || modules.size()>1))
+                return moduleDefs;
+            //
+            Definition module = modules.get(0);
+            PhotranTokenRef moduleTokenRef = module.getTokenRef();
+            Token moduleToken = moduleTokenRef.getASTNode();
+            ScopingNode moduleScope = moduleToken.getLocalScope();
+            List<Definition> tempDefs = moduleScope.getAllPublicDefinitions();
+            String moduleFile = moduleTokenRef.getFilename();
+            for (Definition def: tempDefs) {
+                PhotranTokenRef defTokenRef = def.getTokenRef();
+                if (moduleFile.equals(defTokenRef.getFilename()))
+                    moduleDefs.add(def);
+            }
+        }
+        return moduleDefs;
     }
 
     private int determineLineNumberForOffset(int offset, IDocument document) throws BadLocationException

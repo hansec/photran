@@ -12,6 +12,7 @@ package org.eclipse.photran.internal.core.analysis.binding;
 
 import java.util.List;
 
+import org.eclipse.photran.internal.core.analysis.binding.Definition.Classification;
 import org.eclipse.photran.internal.core.analysis.types.FunctionType;
 import org.eclipse.photran.internal.core.analysis.types.Type;
 import org.eclipse.photran.internal.core.lexer.Token;
@@ -19,7 +20,9 @@ import org.eclipse.photran.internal.core.parser.ASTFunctionParNode;
 import org.eclipse.photran.internal.core.parser.ASTFunctionStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTSubroutineParNode;
 import org.eclipse.photran.internal.core.parser.ASTSubroutineStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTSubroutineSubprogramNode;
 import org.eclipse.photran.internal.core.parser.ASTTypeSpecNode;
+import org.eclipse.photran.internal.core.parser.IASTListNode;
 import org.eclipse.photran.internal.core.vpg.AnnotationType;
 import org.eclipse.photran.internal.core.vpg.PhotranTokenRef;
 
@@ -38,7 +41,9 @@ class SubprogramTypeCollector extends BindingCollector
         super.traverseChildren(node);
         
         PhotranTokenRef tokenRef = node.getSubroutineName().getSubroutineName().getTokenRef();
+        IASTListNode<ASTSubroutineParNode> subParams = node.getSubroutinePars();
         updateDefinitionWithTypeInfo(tokenRef, typeOf(node));
+        updateDefinitionWithSubParameters(tokenRef, typeOf(node), subParams);
     }
 
     @Override public void visitASTFunctionStmtNode(ASTFunctionStmtNode node)
@@ -46,13 +51,61 @@ class SubprogramTypeCollector extends BindingCollector
         super.traverseChildren(node);
         
         PhotranTokenRef tokenRef = node.getFunctionName().getFunctionName().getTokenRef();
+        IASTListNode<ASTFunctionParNode> funParams = node.getFunctionPars();
         updateDefinitionWithTypeInfo(tokenRef, typeOf(node));
+        updateDefinitionWithFunParameters(tokenRef, typeOf(node), funParams);
     }
     
     private void updateDefinitionWithTypeInfo(PhotranTokenRef tokenRef, FunctionType type)
     {
         Definition def = vpg.getDefinitionFor(tokenRef);
         def.setType(type);
+        vpgProvider.setDefinitionFor(tokenRef, def);
+    }
+    
+    private void updateDefinitionWithSubParameters(PhotranTokenRef tokenRef, FunctionType type, IASTListNode<ASTSubroutineParNode> subParams)
+    {
+        Definition def = vpg.getDefinitionFor(tokenRef);
+        // Populate subroutines auto-completion with parameters
+        StringBuilder fullId = new StringBuilder(40);
+        fullId.append(def.getDeclaredName());
+        fullId.append('(');
+        if (subParams != null) {
+            int paramCount = 0;
+            for (ASTSubroutineParNode param: subParams) {
+                Token tmpToken = param.getVariableName();
+                String paramText = tmpToken.getText();
+                if (paramCount>0)
+                    fullId.append(',');
+                fullId.append(paramText);
+                paramCount=paramCount+1;
+            }
+        }
+        fullId.append(')');
+        def.setCompletionText(fullId.toString());
+        vpgProvider.setDefinitionFor(tokenRef, def);
+    }
+    
+    private void updateDefinitionWithFunParameters(PhotranTokenRef tokenRef, FunctionType type, IASTListNode<ASTFunctionParNode> funParams)
+    {
+        Definition def = vpg.getDefinitionFor(tokenRef);
+        // Populate function auto-completion with parameters
+        StringBuilder fullId = new StringBuilder(40);
+        fullId.append(def.getDeclaredName());
+        fullId.append('(');
+        if (funParams != null) {
+            int paramCount = 0;
+            for (ASTFunctionParNode param: funParams) {
+                Token tmpToken = param.getVariableName();
+                String paramText = tmpToken.getText();
+                if (paramCount>0)
+                    fullId.append(',');
+                fullId.append(paramText);
+                paramCount=paramCount+1;
+            }
+        }
+        fullId.append(')');
+        def.setCompletionText(fullId.toString());
         vpgProvider.setDefinitionFor(tokenRef, def);
     }
 

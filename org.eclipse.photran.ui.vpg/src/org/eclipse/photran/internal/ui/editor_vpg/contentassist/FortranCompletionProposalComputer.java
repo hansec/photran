@@ -105,15 +105,21 @@ class FortranCompletionProposalComputer extends CompletionComputer
                 if (def.getClassification().equals(Classification.MAIN_PROGRAM))
                     continue;
                 //Filter by context
-                if (this.contextType == 1 && !(def.getClassification().equals(Classification.DERIVED_TYPE)))
-                    continue;
-                if (this.contextType == 2 && !(def.getClassification().equals(Classification.DERIVED_TYPE) ||
-                    def.getClassification().equals(Classification.VARIABLE_DECLARATION) ||
-                    def.getClassification().equals(Classification.FUNCTION)))
-                    continue;
-                if (this.contextType == 3 && !def.getClassification().equals(Classification.VARIABLE_DECLARATION))
-                    continue;
-                    
+                if (this.contextType == 1) {
+                    if (!(def.getClassification().equals(Classification.DERIVED_TYPE)))
+                        continue;
+                } else if (this.contextType == 2) {
+                    if (!(def.getClassification().equals(Classification.DERIVED_TYPE) ||
+                        def.getClassification().equals(Classification.VARIABLE_DECLARATION) ||
+                        def.getClassification().equals(Classification.FUNCTION)))
+                        continue;
+                } else if (this.contextType == 3) {
+                    if (!def.getClassification().equals(Classification.VARIABLE_DECLARATION))
+                        continue;
+                } else if (this.contextType == 4) {
+                    if (!def.getClassification().equals(Classification.MODULE))
+                        continue;
+                }   
                 //
                 String identifier = def.getCompletionText();
                 String canonicalizedId = def.getCanonicalizedName();
