@@ -39,6 +39,8 @@ import org.eclipse.photran.internal.core.vpg.PhotranVPG;
 import org.eclipse.photran.internal.core.parser.ASTDataComponentDefStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTDerivedTypeDefNode;
 import org.eclipse.photran.internal.core.parser.ASTDerivedTypeStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTProcComponentDefStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTProcDeclNode;
 import org.eclipse.photran.internal.core.parser.ASTProcInterfaceNode;
 import org.eclipse.photran.internal.core.parser.ASTSeparatedListNode;
 import org.eclipse.photran.internal.core.parser.ASTSpecificBindingNode;
@@ -179,21 +181,35 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 for (IDerivedTypeBodyConstruct var: typeBody)
                 {
                     // Skip standard variable clauses
-                    if (var instanceof ASTDataComponentDefStmtNode)
+                    if (!(var instanceof ASTProcComponentDefStmtNode))
                         continue;
-                    Token protoken = var.findFirstToken();
-                    Iterable< ? extends IASTNode> children = var.getChildren();
-                    for (IASTNode child: children){
-                        if (!(child instanceof ASTSeparatedListNode))
-                            continue;
-                        protoken = child.findFirstToken();
-                        if (protoken.isIdentifier())
+                    //
+                    ASTProcComponentDefStmtNode funNode = (ASTProcComponentDefStmtNode) var;
+                    ASTProcInterfaceNode interfaceNode = funNode.getProcInterface();
+                    Token intName = interfaceNode.getInterfaceName();
+                    IASTListNode<ASTProcDeclNode> declNodes = funNode.getProcDeclList();
+                    Token defNode = null;
+                    if (declNodes != null) {
+                        for (ASTProcDeclNode decl: declNodes) {
+                            defNode = decl.getProcedureEntityName();
                             break;
+                        }
                     }
-                    // Create definition object
-                    PhotranTokenRef mytoken = protoken.getTokenRef();
-                    Definition pro_def = new Definition(protoken.getText(),mytoken,Classification.DERIVED_TYPE_COMPONENT,Type.VOID); 
-                    classDefs.add(pro_def);
+                    String subName = null;
+                    if (defNode != null)
+                        subName = defNode.getText();
+                    //
+                    List<PhotranTokenRef> possParents = parentScope.manuallyResolve(intName);
+                    PhotranTokenRef mytoken = possParents.get(0);
+                    intName = mytoken.getASTNode();
+                    Definition subDef = mytoken.getAnnotation(AnnotationType.DEFINITION_ANNOTATION_TYPE);
+                    Definition proDef = new Definition(subName,mytoken,subDef.getClassification(),subDef.getType());
+                    String compText = subDef.getCompletionText();
+                    int nameSize = compText.indexOf('(');
+                    compText = compText.substring(nameSize);
+                    compText = subName + compText;
+                    proDef.setCompletionText(compText);
+                    classDefs.add(proDef);
                 }
             }
             // Look for standard type-bound procedures
@@ -212,32 +228,14 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                         List<PhotranTokenRef> possParents = parentScope.manuallyResolve(proName);
                         PhotranTokenRef mytoken = possParents.get(0);
                         proName = mytoken.getASTNode();
-                        ScopingNode myNode = proName.getLocalScope();
-                        if (myNode instanceof ASTSubroutineSubprogramNode) {
-                            ASTSubroutineSubprogramNode subNode = (ASTSubroutineSubprogramNode) myNode;
-                            ASTSubroutineStmtNode subStatement = subNode.getSubroutineStmt();
-                            IASTListNode<ASTSubroutineParNode> subParams = subStatement.getSubroutinePars();
-                            StringBuilder fullId = new StringBuilder(40);
-                            fullId.append(intName.getText());
-                            fullId.append('(');
-                            if (subParams != null) {
-                                int paramCount = 0;
-                                for (ASTSubroutineParNode param: subParams) {
-                                    Token tmpToken = param.getVariableName();
-                                    String paramText = tmpToken.getText();
-                                    if (paramCount>0)
-                                        fullId.append(',');
-                                    fullId.append(paramText);
-                                    paramCount=paramCount+1;
-                                }
-                            }
-                            fullId.append(')');
-                            subName = fullId.toString();
-                        }
-                        // Create definition object
-                        mytoken = proName.getTokenRef();
-                        Definition pro_def = new Definition(subName,mytoken,Classification.SUBROUTINE,Type.VOID); 
-                        classDefs.add(pro_def);
+                        Definition subDef = mytoken.getAnnotation(AnnotationType.DEFINITION_ANNOTATION_TYPE);
+                        Definition proDef = new Definition(subName,mytoken,subDef.getClassification(),subDef.getType());
+                        String compText = subDef.getCompletionText();
+                        int nameSize = compText.indexOf('(');
+                        compText = compText.substring(nameSize);
+                        compText = subName + compText;
+                        proDef.setCompletionText(compText);
+                        classDefs.add(proDef);
                     }
                 }
             }

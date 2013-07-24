@@ -78,6 +78,14 @@ class SubprogramTypeCollector extends BindingCollector
                 if (paramCount>0)
                     fullId.append(',');
                 fullId.append(paramText);
+                //
+                Definition varDef = bindUniquely(tmpToken);
+                if (varDef != null) {
+                    if (varDef.isOptional()) {
+                        fullId.append('=');
+                        fullId.append(paramText);
+                    }
+                }
                 paramCount=paramCount+1;
             }
         }
@@ -101,6 +109,14 @@ class SubprogramTypeCollector extends BindingCollector
                 if (paramCount>0)
                     fullId.append(',');
                 fullId.append(paramText);
+                //
+                Definition varDef = bindUniquely(tmpToken);
+                if (varDef != null) {
+                    if (varDef.isOptional()) {
+                        fullId.append('=');
+                        fullId.append(paramText);
+                    }
+                }
                 paramCount=paramCount+1;
             }
         }

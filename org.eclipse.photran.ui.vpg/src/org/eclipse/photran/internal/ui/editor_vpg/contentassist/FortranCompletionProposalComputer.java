@@ -119,10 +119,14 @@ class FortranCompletionProposalComputer extends CompletionComputer
                 } else if (this.contextType == 4) {
                     if (!def.getClassification().equals(Classification.MODULE))
                         continue;
-                }   
+                }
                 //
                 String identifier = def.getCompletionText();
                 String canonicalizedId = def.getCanonicalizedName();
+                //
+                if (this.contextType == 5)
+                    identifier = def.getDeclaredName();
+                //
                 if (canonicalizedId.startsWith(prefix) && canonicalizedId.endsWith(suffix))
                     proposals.add(createProposal(identifier,
                                                  def.describeClassification(),
@@ -253,8 +257,17 @@ class FortranCompletionProposalComputer extends CompletionComputer
             for (int i = 0; i < args.length; i++)
             {
                 if (i > 0) sb.append(", "); //$NON-NLS-1$
+                //
+                String argTemp = args[i];
+                if (argTemp.indexOf('=')>=0) {
+                    String[] argSplit = argTemp.split("="); //$NON-NLS-1$
+                    sb.append(argSplit[0].trim().replace(' ', '_'));
+                    sb.append('=');
+                    argTemp=argSplit[1];
+                }
+                //
                 sb.append("${"); //$NON-NLS-1$
-                sb.append(args[i].trim().replace(' ', '_'));
+                sb.append(argTemp.trim().replace(' ', '_'));
                 sb.append('}');
             }
             sb.append(')');
