@@ -41,9 +41,12 @@ import org.eclipse.photran.internal.core.parser.ASTLabelDoStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTModuleStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTNamelistGroupsNode;
 import org.eclipse.photran.internal.core.parser.ASTNamelistStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTProcComponentDefStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTProcDeclNode;
 import org.eclipse.photran.internal.core.parser.ASTProgramStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTSelectCaseStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTSelectTypeStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTSpecificBindingNode;
 import org.eclipse.photran.internal.core.parser.ASTStmtFunctionStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTSubroutineStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTSubroutineSubprogramNode;
@@ -51,6 +54,7 @@ import org.eclipse.photran.internal.core.parser.ASTTypeAttrSpecNode;
 import org.eclipse.photran.internal.core.parser.ASTTypeDeclarationStmtNode;
 import org.eclipse.photran.internal.core.parser.ASTTypeParamDeclNode;
 import org.eclipse.photran.internal.core.parser.ASTTypeParamDefStmtNode;
+import org.eclipse.photran.internal.core.parser.ASTTypeSpecNode;
 import org.eclipse.photran.internal.core.parser.ASTWhereConstructStmtNode;
 import org.eclipse.photran.internal.core.parser.IASTListNode;
 import org.eclipse.photran.internal.core.parser.IInterfaceSpecification;
@@ -136,6 +140,32 @@ class DefinitionCollector extends BindingCollector
             addDefinition(decls.get(i).getComponentName().getComponentName(),
                           Definition.Classification.DERIVED_TYPE_COMPONENT,
                           Type.parse(node.getTypeSpec()));
+    }
+    
+    @Override public void visitASTProcComponentDefStmtNode(ASTProcComponentDefStmtNode node)
+    {
+        super.traverseChildren(node);
+        
+        IASTListNode<ASTProcDeclNode> decls = node.getProcDeclList();
+        for (int i = 0; i < decls.size(); i++) {
+            ASTTypeSpecNode typeAttr = node.getProcInterface().getTypeSpec();
+            Type procType = Type.VOID;
+            if (typeAttr != null)
+                procType = Type.parse(typeAttr);
+            
+            addDefinition(decls.get(i).getProcedureEntityName(),
+                          Definition.Classification.DERIVED_TYPE_COMPONENT,
+                          procType);
+        }
+    }
+    
+    @Override public void visitASTSpecificBindingNode(ASTSpecificBindingNode node)
+    {
+        super.traverseChildren(node);
+        
+        addDefinition(node.getBindingName(),
+                      Definition.Classification.SUBROUTINE,
+                      Type.VOID);
     }
 
     // # R501

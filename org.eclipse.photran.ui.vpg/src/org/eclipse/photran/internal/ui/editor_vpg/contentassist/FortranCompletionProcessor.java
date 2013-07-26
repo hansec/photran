@@ -170,6 +170,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
     {
         // Get known definitions
         List<Definition> classDefs = classScope.getAllDefinitions();
+        return classDefs;/*
         ScopingNode parentScope = classScope.getEnclosingScope();
         // Object is a derived type
         if (classScope instanceof ASTDerivedTypeDefNode ) {
@@ -240,7 +241,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 }
             }
         }
-        return classDefs;
+        return classDefs;*/
     }
     
     private final int determineContext(int offset, int line, IDocument document) throws BadLocationException
