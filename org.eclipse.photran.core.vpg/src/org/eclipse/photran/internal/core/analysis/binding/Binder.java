@@ -49,6 +49,9 @@ public class Binder
         
                                                     start = System.currentTimeMillis();
         ast.accept(new SubprogramTypeCollector());  logTime(start, SubprogramTypeCollector.class, filename);
+        
+        start = System.currentTimeMillis();
+        ast.accept(new DerivedTypeCollector());  logTime(start, DerivedTypeCollector.class, filename);    
 
                                                     start = System.currentTimeMillis();
         ast.accept(new ModuleLoader(file));         logTime(start, ModuleLoader.class, filename);
