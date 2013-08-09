@@ -166,84 +166,6 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
         return proposals.toArray(new ICompletionProposal[proposals.size()]);
     }
     
-    private final List<Definition> getDefsForClass(ScopingNode classScope) throws BadLocationException
-    {
-        // Get known definitions
-        List<Definition> classDefs = classScope.getAllDefinitions();
-        return classDefs;/*
-        ScopingNode parentScope = classScope.getEnclosingScope();
-        // Object is a derived type
-        if (classScope instanceof ASTDerivedTypeDefNode ) {
-            ASTDerivedTypeDefNode typeNode = (ASTDerivedTypeDefNode) classScope;
-            // Look for procedures bound as pointer variables
-            IASTListNode<IDerivedTypeBodyConstruct> typeBody =  typeNode.getDerivedTypeBody();
-            if (typeBody != null) {
-                // Search AST variable definitions
-                for (IDerivedTypeBodyConstruct var: typeBody)
-                {
-                    // Skip standard variable clauses
-                    if (!(var instanceof ASTProcComponentDefStmtNode))
-                        continue;
-                    //
-                    ASTProcComponentDefStmtNode funNode = (ASTProcComponentDefStmtNode) var;
-                    ASTProcInterfaceNode interfaceNode = funNode.getProcInterface();
-                    Token intName = interfaceNode.getInterfaceName();
-                    IASTListNode<ASTProcDeclNode> declNodes = funNode.getProcDeclList();
-                    Token defNode = null;
-                    if (declNodes != null) {
-                        for (ASTProcDeclNode decl: declNodes) {
-                            defNode = decl.getProcedureEntityName();
-                            break;
-                        }
-                    }
-                    String subName = null;
-                    if (defNode != null)
-                        subName = defNode.getText();
-                    //
-                    List<PhotranTokenRef> possParents = parentScope.manuallyResolve(intName);
-                    PhotranTokenRef mytoken = possParents.get(0);
-                    intName = mytoken.getASTNode();
-                    Definition subDef = mytoken.getAnnotation(AnnotationType.DEFINITION_ANNOTATION_TYPE);
-                    Definition proDef = new Definition(subName,mytoken,subDef.getClassification(),subDef.getType());
-                    String compText = subDef.getCompletionText();
-                    int nameSize = compText.indexOf('(');
-                    compText = compText.substring(nameSize);
-                    compText = subName + compText;
-                    proDef.setCompletionText(compText);
-                    classDefs.add(proDef);
-                }
-            }
-            // Look for standard type-bound procedures
-            ASTTypeBoundProcedurePartNode typePro =  typeNode.getTypeBoundProcedurePart();
-            if (typePro != null) {
-                IASTListNode<IProcBindingStmt> boundPros = typePro.getProcBindingStmts();
-                // Parse AST type-bound procedures
-                for (IProcBindingStmt procedure: boundPros)
-                {
-                    if (procedure instanceof ASTSpecificBindingNode) {
-                        ASTSpecificBindingNode currNode = (ASTSpecificBindingNode) procedure;
-                        Token intName = currNode.getBindingName();
-                        String subName = intName.getText();
-                        Token proName = currNode.getProcedureName();
-                        //
-                        List<PhotranTokenRef> possParents = parentScope.manuallyResolve(proName);
-                        PhotranTokenRef mytoken = possParents.get(0);
-                        proName = mytoken.getASTNode();
-                        Definition subDef = mytoken.getAnnotation(AnnotationType.DEFINITION_ANNOTATION_TYPE);
-                        Definition proDef = new Definition(subName,mytoken,subDef.getClassification(),subDef.getType());
-                        String compText = subDef.getCompletionText();
-                        int nameSize = compText.indexOf('(');
-                        compText = compText.substring(nameSize);
-                        compText = subName + compText;
-                        proDef.setCompletionText(compText);
-                        classDefs.add(proDef);
-                    }
-                }
-            }
-        }
-        return classDefs;*/
-    }
-    
     private final int determineContext(int offset, int line, IDocument document) throws BadLocationException
     {
         int contextType = 0;
@@ -450,7 +372,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
         // If we have located the scope get definitions
         if (classScope != null) {
             // Definitions for this scope
-            classDefs = getDefsForClass(classScope);
+            classDefs = classScope.getAllDefinitions();
             // Process inherited elements
             PhotranTokenRef mytoken = null;
             while (true) {
@@ -476,7 +398,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                     } else {
                         ScopingNode tempScope = parentClass.getLocalScope();
                         // Get known definitions
-                        List<Definition> tempDefs = getDefsForClass(tempScope);
+                        List<Definition> tempDefs = tempScope.getAllDefinitions();
                         for (Definition newDef: tempDefs) {
                             boolean overridden = false;
                             for (Definition currDef: classDefs){
