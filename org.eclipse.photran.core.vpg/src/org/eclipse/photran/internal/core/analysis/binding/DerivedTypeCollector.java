@@ -10,6 +10,7 @@
  *******************************************************************************/
 package org.eclipse.photran.internal.core.analysis.binding;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.photran.internal.core.analysis.binding.Definition.Classification;
@@ -31,11 +32,11 @@ import org.eclipse.photran.internal.core.vpg.AnnotationType;
 import org.eclipse.photran.internal.core.vpg.PhotranTokenRef;
 
 /**
- * Phase 5 of name-binding analysis.
+ * Phase 6 of name-binding analysis.
  * <p>
- * Visits subprogram declarations, setting their types in the VPG.
+ * Visits derived type declarations, setting children in the VPG.
  *
- * @author Jeff Overbey
+ * @author Chris Hansen
  * @see Binder
  */
 class DerivedTypeCollector extends BindingCollector
@@ -47,21 +48,14 @@ class DerivedTypeCollector extends BindingCollector
         PhotranTokenRef procRef = decls.get(0).getProcedureEntityName().getTokenRef();
         
         Token bindingInterface = node.getProcInterface().getInterfaceName();
-        ScopingNode enclosingScope = bindingInterface.getEnclosingScope().getGlobalScope();
-        List<Definition> modDefs = enclosingScope.getAllDefinitions();
-        //List<PhotranTokenRef> possParents = enclosingScope.manuallyResolve(bindingInterface);
         String compText = null;
-        /*if (possParents.size()>0) {
-            PhotranTokenRef tokenRef = possParents.get(0);
-            Definition subDef = tokenRef.getAnnotation(AnnotationType.DEFINITION_ANNOTATION_TYPE);
+        //
+        ArrayList<Definition> intDefs = vpg.findAllDeclarationsInInterfacesForExternalSubprogram(bindingInterface.getText());
+        if (intDefs != null) {
+            Definition subDef = intDefs.get(0);
             compText = subDef.getCompletionText();
-        }*/
-        for (Definition def: modDefs) {
-            if(def.getCanonicalizedName().equals(bindingInterface.getText())) {
-                compText = def.getCompletionText();
-                break;
-            }
         }
+        //
         if (compText!=null) { 
             int argStart = compText.indexOf('(');
             if (argStart>=0) {
