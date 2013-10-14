@@ -51,16 +51,26 @@ import org.eclipse.swt.graphics.Image;
  */
 class FortranCompletionProposalComputer extends CompletionComputer
 {
+    public static enum Context
+    {
+        GENERIC,
+        TYPE_VARIABLE_DEF,
+        ALLOCATE,
+        DEALLOCATE,
+        USE,
+        USE_ONLY;
+    }
+    
     private HashMap<String, TreeSet<Definition>> defs;
     private String scope;
-    private int contextType;
-
-    FortranCompletionProposalComputer(HashMap<String, TreeSet<Definition>> defs, String scope, IDocument document, int offset, int contextType) throws BadLocationException
+    protected Context context;
+    
+    FortranCompletionProposalComputer(HashMap<String, TreeSet<Definition>> defs, String scope, IDocument document, int offset, Context contextType) throws BadLocationException
     {
         super(document, offset);
         this.defs = defs;
         this.scope = scope;
-        this.contextType = contextType;
+        this.context = contextType;
     }
     
     public List<ICompletionProposal> proposalsFromTheseDefs(Iterable<Definition> defsIn) throws BadLocationException
@@ -105,18 +115,18 @@ class FortranCompletionProposalComputer extends CompletionComputer
                 if (def.getClassification().equals(Classification.MAIN_PROGRAM))
                     continue;
                 //Filter by context
-                if (this.contextType == 1) {
+                if (this.context == Context.TYPE_VARIABLE_DEF) {
                     if (!(def.getClassification().equals(Classification.DERIVED_TYPE)))
                         continue;
-                } else if (this.contextType == 2) {
+                } else if (this.context == Context.ALLOCATE) {
                     if (!(def.getClassification().equals(Classification.DERIVED_TYPE) ||
                         def.getClassification().equals(Classification.VARIABLE_DECLARATION) ||
                         def.getClassification().equals(Classification.FUNCTION)))
                         continue;
-                } else if (this.contextType == 3) {
+                } else if (this.context == Context.DEALLOCATE) {
                     if (!def.getClassification().equals(Classification.VARIABLE_DECLARATION))
                         continue;
-                } else if (this.contextType == 4) {
+                } else if (this.context == Context.USE) {
                     if (!def.getClassification().equals(Classification.MODULE))
                         continue;
                 }
@@ -124,7 +134,7 @@ class FortranCompletionProposalComputer extends CompletionComputer
                 String identifier = def.getCompletionText();
                 String canonicalizedId = def.getCanonicalizedName();
                 //
-                if (this.contextType == 5)
+                if (this.context == Context.USE_ONLY)
                     identifier = def.getDeclaredName();
                 //
                 if (canonicalizedId.startsWith(prefix) && canonicalizedId.endsWith(suffix))

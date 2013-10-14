@@ -223,6 +223,11 @@ public class Definition implements IPhotranSerializable, Comparable<Definition>
     {
         return classification == Classification.DERIVED_TYPE;
     }
+    
+    public boolean isDerivedTypeComponent()
+    {
+        return classification == Classification.DERIVED_TYPE_COMPONENT;
+    }
 
     public boolean isSubprogram()
     {

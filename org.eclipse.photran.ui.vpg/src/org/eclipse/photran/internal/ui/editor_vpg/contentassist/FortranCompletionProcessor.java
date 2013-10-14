@@ -59,6 +59,7 @@ import org.eclipse.photran.internal.ui.editor.FortranEditor;
 import org.eclipse.photran.internal.ui.editor.FortranTemplateCompletionProcessor;
 import org.eclipse.photran.internal.ui.editor.FortranStmtPartitionScanner;
 import org.eclipse.photran.internal.ui.editor_vpg.FortranEditorTasks;
+import org.eclipse.photran.internal.ui.editor_vpg.contentassist.FortranCompletionProposalComputer.Context;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.RGB;
 
@@ -124,13 +125,13 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 
                 int line = determineLineNumberForOffset(offset, document);
                 String scopeName = determineScopeNameForLine(line);
-                int contextType = determineContext(offset,line,document);
+                Context contextType = determineContext(offset,line,document);
                 List<Definition> classDefs = null;
-                if (contextType == 4) {
+                if (contextType == Context.USE) {
                     classDefs = determineModuleNames();
                     if (classDefs.isEmpty())
                         classDefs = null;
-                } else if (contextType == 5) {
+                } else if (contextType == Context.USE_ONLY) {
                     classDefs = determineModuleDefs(offset,line,document,scopeName);
                     if (classDefs.isEmpty())
                         classDefs = null;
@@ -166,9 +167,9 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
         return proposals.toArray(new ICompletionProposal[proposals.size()]);
     }
     
-    private final int determineContext(int offset, int line, IDocument document) throws BadLocationException
+    private final Context determineContext(int offset, int line, IDocument document) throws BadLocationException
     {
-        int contextType = 0;
+        Context contextType = Context.GENERIC;
         // Get line to analyze
         int line_offset = document.getLineOffset(line);
         int cur_length = offset-line_offset;
@@ -186,18 +187,18 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
             // Determine type of statement
             if (keyword.matches("class|type")) { //$NON-NLS-1$ 
                 if (current_line.contains("(") && !current_line.contains(")")) //$NON-NLS-1$ //$NON-NLS-2$
-                    contextType=1;
+                    contextType=Context.TYPE_VARIABLE_DEF;
             } else if (keyword.matches("allocate")) { //$NON-NLS-1$ 
                 if (current_line.contains("(") && !current_line.contains(")")) //$NON-NLS-1$ //$NON-NLS-2$
-                    contextType=2;
+                    contextType=Context.ALLOCATE;
             } else if (keyword.matches("deallocate|nullify")) { //$NON-NLS-1$ 
                 if (current_line.contains("(") && !current_line.contains(")")) //$NON-NLS-1$ //$NON-NLS-2$
-                    contextType=3;
+                    contextType=Context.DEALLOCATE;
             } else if (keyword.matches("use")) { //$NON-NLS-1$ 
                 if (!current_line.contains(":")) //$NON-NLS-1$ 
-                    contextType=4;
+                    contextType=Context.USE;
                 else
-                    contextType=5;
+                    contextType=Context.USE_ONLY;
             }
         }
         // Unknown context
@@ -238,7 +239,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
         }
         // Handle nested classes
         String[] sub_fields = current_variable.split("%"); //$NON-NLS-1$
-        String base_variable = sub_fields[0];
+        String base_variable = sub_fields[0].toLowerCase();
         // Search for base variable in currently available scopes
         String type_name = null;
         Iterable<Definition> proposalsToConsider = null;
@@ -249,17 +250,16 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
             {
                 for (Definition def : proposalsToConsider)
                 {
-                    if (def.getClassification().equals(Classification.MAIN_PROGRAM))
+                    if (!def.isLocalVariable())
                         continue;
-                    String identifier = def.getDeclaredName();
+                    String identifier = def.getCanonicalizedName();
                     if (!identifier.equals(base_variable))
                         continue;
                     // Base variable definition found
                     Type var_type = def.getType();
                     if (var_type instanceof DerivedType ) {
-                        String[] tmp1 = var_type.toString().split("\\("); //$NON-NLS-1$
-                        String[] tmp2 = tmp1[1].split("\\)"); //$NON-NLS-1$
-                        type_name = tmp2[0].toLowerCase();
+                        DerivedType typeNode = (DerivedType) var_type;
+                        type_name = typeNode.getName();
                         break;
                     }
                 }
@@ -283,7 +283,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 {
                     for (Definition def : proposalsToConsider)
                     {
-                        if (def.getClassification().equals(Classification.MAIN_PROGRAM))
+                        if (!def.isDerivedType())
                             continue;
                         String identifier = def.getCanonicalizedName();
                         // Type definition found
@@ -325,7 +325,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 {
                     for (Definition def : proposalsToConsider)
                     {
-                        if (def.getClassification().equals(Classification.MAIN_PROGRAM))
+                        if (!def.isDerivedTypeComponent())
                             continue;
                         //
                         String identifier = def.getCanonicalizedName();
@@ -334,9 +334,8 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                         // Get type name
                         Type var_type = def.getType();
                         if (var_type instanceof DerivedType ) {
-                            String[] tmp1 = var_type.toString().split("\\("); //$NON-NLS-1$
-                            String[] tmp2 = tmp1[1].split("\\)"); //$NON-NLS-1$
-                            type_name = tmp2[0].toLowerCase();
+                            DerivedType typeNode = (DerivedType) var_type;
+                            type_name = typeNode.getName();
                             break;
                         }
                     }
@@ -347,7 +346,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 {
                     for (Definition def : proposalsToConsider)
                     {
-                        if (def.getClassification().equals(Classification.MAIN_PROGRAM))
+                        if (!def.isDerivedType())
                             continue;
                         //
                         String identifier = def.getCanonicalizedName();

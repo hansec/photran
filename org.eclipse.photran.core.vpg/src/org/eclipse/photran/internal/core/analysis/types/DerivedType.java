@@ -33,6 +33,11 @@ public class DerivedType extends Type
         this.name = name.toLowerCase();
     }
 
+    public String getName()
+    {
+        return this.name;
+    }
+    
     @Override public String toString()
     {
         return "type(" + name + ")"; //$NON-NLS-1$ //$NON-NLS-2$
