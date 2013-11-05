@@ -97,7 +97,8 @@ class DefinitionCollector extends BindingCollector
         
         Definition d = addDefinition(node.getTypeName(), Definition.Classification.DERIVED_TYPE, Type.VOID);
         
-        ScopingNode enclosingScope = node.findNearestAncestor(ScopingNode.class);
+        ScopingNode parentScope = node.findNearestAncestor(ScopingNode.class);
+        ScopingNode enclosingScope = parentScope.getEnclosingScope();
         
 //        if (node.getAccessSpec() != null)
 //            d.setVisibility(node.getAccessSpec());
