@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 University of Illinois at Urbana-Champaign and others.
+ * Copyright (c) 2007, 2014 University of Illinois at Urbana-Champaign and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,6 +7,7 @@
  *
  * Contributors:
  *     UIUC - Initial API and implementation
+ *     Chris Hansen (U Washington) - Auto-complete improvements (Bug 414906)
  *******************************************************************************/
 package org.eclipse.photran.internal.core.analysis.binding;
 
@@ -70,6 +71,7 @@ import org.eclipse.photran.internal.core.vpg.PhotranVPG;
  * Operators are NOT included in the symbol table.
  * 
  * @author Jeff Overbey
+ * @author Chris Hansen
  * @see Binder
  */
 class DefinitionCollector extends BindingCollector

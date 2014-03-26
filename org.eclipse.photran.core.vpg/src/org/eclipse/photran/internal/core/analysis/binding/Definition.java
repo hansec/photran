@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2007 University of Illinois at Urbana-Champaign and others.
+ * Copyright (c) 2007, 2014 University of Illinois at Urbana-Champaign and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -7,6 +7,7 @@
  *
  * Contributors:
  *     UIUC - Initial API and implementation
+ *     Chris Hansen (U Washington) - Auto-complete improvements (Bug 414906)
  *******************************************************************************/
 package org.eclipse.photran.internal.core.analysis.binding;
 
@@ -63,6 +64,7 @@ import org.eclipse.rephraserengine.core.vpg.IVPGNode;
  * <b>array spec</b> may give an array specification (e.g., one-dimensional, indexed from 3 to 5).
  *
  * @author Jeff Overbey
+ * @author Chris Hansen
  */
 public class Definition implements IPhotranSerializable, Comparable<Definition>
 {
@@ -332,13 +334,14 @@ public class Definition implements IPhotranSerializable, Comparable<Definition>
         return canonicalizedName;
     }
     
-    /** @return the name of the entity this defines, canonicalized by <code>PhotranVPG.canonicalizeIdentifier</code> */
+    /** Sets the auto-completion text to be used for this definition. This is usually the name of the defined entity,
+     * however for procedures/functions this text contains the argument list as well. */
     public void setCompletionText(String completionText)
     {
         this.completionText = completionText;
     }
     
-    /** @return the name of the entity this defines, canonicalized by <code>PhotranVPG.canonicalizeIdentifier</code> */
+    /** @return the auto-completion text for this definition, canonicalized by <code>PhotranVPG.canonicalizeIdentifier</code> */
     public String getCompletionText()
     {
         return completionText;

@@ -1,3 +1,14 @@
+/*******************************************************************************
+ * Copyright (c) 2007, 2014 University of Illinois at Urbana-Champaign and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     UIUC - Initial API and implementation
+ *     Chris Hansen (U Washington) - Auto-complete improvements (Bug 414906)
+ *******************************************************************************/
 package org.eclipse.photran.internal.core.analysis.binding;
 
 import java.io.PrintStream;
@@ -17,6 +28,7 @@ import org.eclipse.photran.internal.core.vpg.PhotranVPGWriter;
  * {@link Token#resolveBinding()} and related methods to look up binding information.
  * 
  * @author Jeff Overbey
+ * @author Chris Hansen
  */
 public class Binder
 {
