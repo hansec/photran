@@ -114,12 +114,16 @@ class FortranCompletionProposalComputer extends CompletionComputer
                     if (!(def.getClassification().equals(Classification.DERIVED_TYPE)))
                         continue;
                 } else if (this.context == Context.ALLOCATE) {
-                    if (!(def.getClassification().equals(Classification.DERIVED_TYPE) ||
-                        def.getClassification().equals(Classification.VARIABLE_DECLARATION) ||
-                        def.getClassification().equals(Classification.FUNCTION)))
+                    if (!(def.getClassification().equals(Classification.VARIABLE_DECLARATION) ||
+                        def.getClassification().equals(Classification.IMPLICIT_LOCAL_VARIABLE) ||
+                        def.getClassification().equals(Classification.COMMON_BLOCK) ||
+                        def.getClassification().equals(Classification.FUNCTION) ||
+                        def.getClassification().equals(Classification.DERIVED_TYPE_COMPONENT)))
                         continue;
                 } else if (this.context == Context.DEALLOCATE) {
-                    if (!def.getClassification().equals(Classification.VARIABLE_DECLARATION))
+                    if (!(def.getClassification().equals(Classification.VARIABLE_DECLARATION) ||
+                        def.getClassification().equals(Classification.IMPLICIT_LOCAL_VARIABLE) ||
+                        def.getClassification().equals(Classification.DERIVED_TYPE_COMPONENT)))
                         continue;
                 } else if (this.context == Context.USE) {
                     if (!def.getClassification().equals(Classification.MODULE))
