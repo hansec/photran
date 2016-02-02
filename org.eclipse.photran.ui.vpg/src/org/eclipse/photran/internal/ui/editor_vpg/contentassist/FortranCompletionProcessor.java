@@ -213,22 +213,29 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 current_variable = matched_vars.group();
         }
         if (current_variable == null)
-            return classDefs;
+            return null;
         if (!(current_variable.contains("%") && current_variable.endsWith(prevChar))) //$NON-NLS-1$
-            return classDefs;
+            return null;
         // Handle arrays usage
-        current_variable = current_variable.replaceAll("\\(([^\\)]+)\\)", ""); //$NON-NLS-1$ //$NON-NLS-2$
+        current_variable = current_variable.replaceAll("\\(([^()]+)\\)", ""); //$NON-NLS-1$ //$NON-NLS-2$
         // Remove leading characters if setting an array index
         int parenLoc = current_variable.lastIndexOf('(');
         if (parenLoc>=0)
         {
             current_variable = current_variable.substring(parenLoc+1);
         }
+        // Remove leading characters if a value in function call
+        int commaLoc = current_variable.lastIndexOf(',');
+        if (commaLoc>=0)
+        {
+            current_variable = current_variable.substring(commaLoc+1);
+        }
         // Handle nested classes
         String[] sub_fields = current_variable.split("%"); //$NON-NLS-1$
         String base_variable = sub_fields[0].toLowerCase();
         // Search for base variable in currently available scopes
         String type_name = null;
+        ScopingNode varScope = null;
         Iterable<Definition> proposalsToConsider = null;
         while (true)
         {   
@@ -247,6 +254,7 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                     if (var_type instanceof DerivedType ) {
                         DerivedType typeNode = (DerivedType) var_type;
                         type_name = typeNode.getName();
+                        varScope = def.getTokenRef().getASTNode().getEnclosingScope();
                         break;
                     }
                 }
@@ -261,11 +269,14 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
             else
                 scopeTemp = scopeTemp.substring(colon+1);
         }
+        // If type name cannot be determined return
+        if (type_name == null)
+            return null;
         // Step up remaining scopes looking for type definition
         outerloop:
             while (true)
-            {   
-                proposalsToConsider = defs.get(scopeTemp);
+            {
+                proposalsToConsider = varScope.getAllDefinitions();
                 if (proposalsToConsider != null)
                 {
                     for (Definition def : proposalsToConsider)
@@ -290,16 +301,18 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                         }
                     }
                 }
-                //
+                // Found variable definition
                 if (classDefs != null)
                     break;
-                // Step to next outer scope if declaration has not been found
-                int colon = scopeTemp.indexOf(':');
-                if (colon < 0)
+                //
+                parentScope = varScope.getEnclosingScope();
+                if (parentScope == null)
                     break;
-                else
-                    scopeTemp = scopeTemp.substring(colon+1);
+                varScope=parentScope;
             }
+        // Class scope could not be determined
+        if (classScope == null)
+            return null;
         // Step up class chain to current type
         if (sub_fields.length > 1) {
             for (int i = 1; i<sub_fields.length; i=i+1)
@@ -355,49 +368,49 @@ public class FortranCompletionProcessor implements IContentAssistProcessor
                 }
             }
         }
-        // If we have located the scope get definitions
-        if (classScope != null) {
-            // Definitions for this scope
-            classDefs = classScope.getAllDefinitions();
-            // Process inherited elements
-            PhotranTokenRef mytoken = null;
-            while (true) {
-                if (classScope instanceof ASTDerivedTypeDefNode ) {
-                    Token parentClass = null;
-                    ASTDerivedTypeDefNode typeNode = (ASTDerivedTypeDefNode) classScope;
-                    // Look for inheritance node
-                    ASTDerivedTypeStmtNode typeDef =  typeNode.getDerivedTypeStmt();
-                    IASTListNode<ASTTypeAttrSpecNode> defList = typeDef.getTypeAttrSpecList();
-                    if (defList != null) {
-                        for (ASTTypeAttrSpecNode currDef: defList) {
-                            if (!currDef.isExtends())
-                                continue;
-                            parentClass = currDef.getParentTypeName();
-                            List<PhotranTokenRef> possParents = parentScope.manuallyResolve(parentClass);
-                            mytoken = possParents.get(0);
-                            parentClass = mytoken.getASTNode();
-                        }
+        // If class scope cannot be determined return
+        if (classScope == null)
+            return null;
+        // Definitions for this scope
+        classDefs = classScope.getAllDefinitions();
+        // Process inherited elements
+        PhotranTokenRef mytoken = null;
+        while (true) {
+            if (classScope instanceof ASTDerivedTypeDefNode ) {
+                Token parentClass = null;
+                ASTDerivedTypeDefNode typeNode = (ASTDerivedTypeDefNode) classScope;
+                // Look for inheritance node
+                ASTDerivedTypeStmtNode typeDef =  typeNode.getDerivedTypeStmt();
+                IASTListNode<ASTTypeAttrSpecNode> defList = typeDef.getTypeAttrSpecList();
+                if (defList != null) {
+                    for (ASTTypeAttrSpecNode currDef: defList) {
+                        if (!currDef.isExtends())
+                            continue;
+                        parentClass = currDef.getParentTypeName();
+                        List<PhotranTokenRef> possParents = parentScope.manuallyResolve(parentClass);
+                        mytoken = possParents.get(0);
+                        parentClass = mytoken.getASTNode();
                     }
-                    // Scan parent class for new methods/variables
-                    if (parentClass==null) {
-                        break;
-                    } else {
-                        ScopingNode tempScope = parentClass.getLocalScope();
-                        // Get known definitions
-                        List<Definition> tempDefs = tempScope.getAllDefinitions();
-                        for (Definition newDef: tempDefs) {
-                            boolean overridden = false;
-                            for (Definition currDef: classDefs){
-                                String currIden = currDef.getCanonicalizedName();
-                                if (currIden.equals(newDef.getCanonicalizedName()))
-                                    overridden = true;
-                            }
-                            if (!overridden)
-                                classDefs.add(newDef);
+                }
+                // Scan parent class for new methods/variables
+                if (parentClass==null) {
+                    break;
+                } else {
+                    ScopingNode tempScope = parentClass.getLocalScope();
+                    // Get known definitions
+                    List<Definition> tempDefs = tempScope.getAllDefinitions();
+                    for (Definition newDef: tempDefs) {
+                        boolean overridden = false;
+                        for (Definition currDef: classDefs){
+                            String currIden = currDef.getCanonicalizedName();
+                            if (currIden.equals(newDef.getCanonicalizedName()))
+                                overridden = true;
                         }
-                        // Update scope to move up inheritance ladder
-                        classScope = tempScope;
+                        if (!overridden)
+                            classDefs.add(newDef);
                     }
+                    // Update scope to move up inheritance ladder
+                    classScope = tempScope;
                 }
             }
         }
