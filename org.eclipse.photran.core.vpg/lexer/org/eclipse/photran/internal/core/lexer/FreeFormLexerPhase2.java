@@ -398,6 +398,9 @@ public class FreeFormLexerPhase2 implements ILexer
         addRules(Terminal.T_INTERFACE,
             new StmtMustStartWithOneOf(Terminal.T_END, Terminal.T_ABSTRACT),
             new MustBePrecededByOneOf(Terminal.T_END, Terminal.T_ABSTRACT));
+
+        addRule(Terminal.T_IMPORT,
+            new StmtMustStartWith(Terminal.T_IMPORT));
         // END FORTRAN 2003 ///////////////////////////////////////////////////////////////////////
 
         // BEGIN HP EXTENSIONS ///////////////////////////////////////////////////////////////////////
@@ -414,9 +417,12 @@ public class FreeFormLexerPhase2 implements ILexer
         applySameRulesTo(Terminal.T_LENEQ);
 
         // R512
-        addRules(Terminal.T_IN,
+        addRule(Terminal.T_IN,
+            new And(
                 new MustBePartOfTypeDeclOrStmtMustStartWith(Terminal.T_INTENT),
-                new MustBePrecededByOneOf(Terminal.T_LPAREN, Terminal.T_IN, Terminal.T_OUT));
+                new Or(
+                    new MustBePrecededBy(Terminal.T_INTENT, Terminal.T_LPAREN),
+                    new MustBePrecededByOneOf(Terminal.T_IN, Terminal.T_OUT))));
         applySameRulesTo(Terminal.T_OUT);
         applySameRulesTo(Terminal.T_INOUT);
 
@@ -450,7 +456,7 @@ public class FreeFormLexerPhase2 implements ILexer
 
         // R746
         addRules(Terminal.T_WHERE,
-                new StmtMustStartWith(Terminal.T_END),
+                new StmtMustStartWithOneOf(Terminal.T_END, Terminal.T_ELSE),
                 new MustBePrecededByOneOf(Terminal.T_END, Terminal.T_ELSE));
 
         // R748
@@ -785,6 +791,22 @@ public class FreeFormLexerPhase2 implements ILexer
                 }
             }
         }
+        else if (((IToken)tokenStream.elementAt(firstTokenPos)).getTerminal() == Terminal.T_ENUMERATOR)
+        {
+            if (!openContextEquals)
+            {
+                retainAsKeyword[firstTokenPos] = true;
+            }
+            else if (tokenStream.size() > firstTokenPos + 2)
+            {
+                Terminal la1 = ((IToken)tokenStream.elementAt(firstTokenPos+1)).getTerminal();
+                Terminal la2 = ((IToken)tokenStream.elementAt(firstTokenPos+2)).getTerminal();
+                if (la1 == Terminal.T_COLON && la2 == Terminal.T_COLON)
+                {
+                    retainAsKeyword[firstTokenPos] = true;
+                }
+            }
+        }
         else if (((IToken)tokenStream.elementAt(firstTokenPos)).getTerminal() == Terminal.T_END)
         {
             for (int i = firstTokenPos+1; i < tokenStream.size(); i++)
@@ -795,10 +817,6 @@ public class FreeFormLexerPhase2 implements ILexer
                     retainAsKeyword[i] = (parenDepth[i] == 0 && i != idPos);
                 }
             }
-        }
-        else if (((IToken)tokenStream.elementAt(firstTokenPos)).getTerminal() == Terminal.T_IMPORT)
-        {
-            retainAsKeyword[firstTokenPos] = true;
         }
         else if (((IToken)tokenStream.elementAt(firstTokenPos)).getTerminal() == Terminal.T_GENERIC
             && tokenStream.size() > 1
@@ -1003,9 +1021,13 @@ public class FreeFormLexerPhase2 implements ILexer
             }
 
             // We didn't follow a comma or :: and we're at paren level 0:
-            // This is the identifier!
             else
             {
+                // If this is an assignment like "double = 5", there is no declaration
+                if (openContextEquals)
+                    return null;
+
+                // This is the identifier!
                 declIdentifierPos = i;
                 break;
             }
@@ -1187,7 +1209,6 @@ public class FreeFormLexerPhase2 implements ILexer
             firstTokenPriorId = tokenTerminal;
         }
 
-        @SuppressWarnings("unused")
         public MustBePrecededBy(Terminal tokenTerminal1, Terminal tokenTerminal2)
         {
             secondTokenPriorId = tokenTerminal1;
